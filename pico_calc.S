@@ -4,8 +4,8 @@
 	// UMass Lowell EECE.3170 Microprocessors I
 	// Project: RP2040-based Calculator in ARM Assembly
 	
-	.global hw6
-    .type hw6, %function
+	.global pico_calc
+    .type pico_calc, %function
 #include "pico/asm_helper.S" // Named memory-mapped registers
 #include "hardware/regs/io_bank0.h" // IO Bank registers
 #include "hardware/regs/timer.h" // Timer registers
@@ -26,7 +26,7 @@ idle:
 setup_i2c:
 	push {r0-r3}
 	// Set I2C pins
-	
+
 	// 4.3.10.2 Master Operation
 	// Make sure IP block disabled before configuring
 	ldr r0, =(I2C0_BASE + I2C_IC_ENABLE_OFFSET)
