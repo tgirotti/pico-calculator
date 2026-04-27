@@ -27,7 +27,7 @@ setup_i2c:
 	push {r0-r3}
 	// Set I2C pins
 	ldr r0, =(IO_BANK0_BASE + IO_BANK0_GPIO26_CTRL_OFFSET)
-	ldr r1, =(IO_BANK0_GPIO6_CTRL_FUNCSEL_BITS & IO_BANK0_GPIO6_CTRL_FUNCSEL_VALUE_I2C0_SDA)
+	ldr r1, =(IO_BANK0_GPIO6_CTRL_FUNCSEL_BITS & (IO_BANK0_GPIO4_CTRL_FUNCSEL_VALUE_I2C0_SDA << IO_BANK0_GPIO4_CTRL_FUNCSEL_MSB))
 	// 4.3.10.2 Master Operation
 	// Make sure IP block disabled before configuring
 	ldr r0, =(I2C0_BASE + I2C_IC_ENABLE_OFFSET)
@@ -41,14 +41,14 @@ setup_i2c:
 	str r1, [r0]
 	ldr r1, =(
 		(I2C_IC_CON_MASTER_MODE_BITS & I2C_IC_CON_MASTER_MODE_VALUE_ENABLED) |
-		(I2C_IC_CON_SPEED_BITS & I2C_IC_CON_SPEED_VALUE_STANDARD) | 
-		(I2C_IC_CON_IC_SLAVE_DISABLE_BITS & I2C_IC_CON_IC_SLAVE_DISABLE_VALUE_SLAVE_DISABLED) |
+		(I2C_IC_CON_SPEED_BITS & (I2C_IC_CON_SPEED_VALUE_STANDARD << I2C_IC_CON_SPEED_MSB)) | 
+		(I2C_IC_CON_IC_SLAVE_DISABLE_BITS & (I2C_IC_CON_IC_SLAVE_DISABLE_VALUE_SLAVE_DISABLED << I2C_IC_CON_IC_SLAVE_DISABLE_MSB)) |
 	)
 	str r1, [r0]
 
 	// Set our own address and target address
 	ldr r0, =(I2C0_BASE + I2C_IC_TAR_OFFSET)
-	ldr r1, =(I2C_IC_TAR_IC_TAR_BITS & lcd_addr)
+	ldr r1, =(I2C_IC_TAR_IC_TAR_BITS & (lcd_addr << I2C_IC_TAR_IC_TAR_MSB))
 
 	// Enable I2C
 	ldr r0, =(I2C0_BASE + I2C_IC_ENABLE_OFFSET)
@@ -62,8 +62,15 @@ setup_i2c:
 send_test_data:
 	push {r0-r3}
 	// From datasheet
-	ldr r0, =(0000110000b) // Set to 8 bit operation and select 1-line display
-	ldr r0, =(0000001110b)
+	ldr r0, =(I2C0_BASE + I2C_IC_DATA_CMD_OFFSET) // Command register
+	// Set to write data
+	ldr r1, =(I2C_IC_DATA_CMD_CMD_BITS & (I2C_IC_DATA_CMD_CMD_VALUE_WRITE << I2C_IC_DATA_CMD_CMD_MSB))
+	add r1, 0000110000b // Set to 8 bit mode, write
+	str r1, [r0] // Actually send the bits
+	ldr r1, =(I2C_IC_DATA_CMD_BITS & 0000001110b) // Increase address by one, will shift cursor to right when writing to DD RAM
+	str r1, [r0]
+
+
 	pop {r0-r3}
 	bx lr
 
