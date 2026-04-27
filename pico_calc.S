@@ -13,6 +13,7 @@
 #include "hardware/regs/intctrl.h" // Interrupt registers/bits
 #include "hardware/regs/m0plus.h" // Cortex-M0+ registers (interrupt regs, etc.)
 #include "hardware/regs/i2c.h" // I2C block registers and bits
+#include "hardware/regs/pads_bank0.h" // Pad control registers
 #define LCD_ADDR 0x3f
 
 pico_calc:
@@ -60,7 +61,8 @@ setup_i2c:
 	// Enable pull-up resistors
 	ldr r2, =(PADS_BANK0_BASE + PADS_BANK0_GPIO0_OFFSET)
 	ldr r0, [r2]
-	ldr r1, =(!PADS_BANK0_GPIO0_PDE_BITS)
+	ldr r1, =(PADS_BANK0_GPIO0_PDE_BITS)
+	mvn r1, r1
 	and r0, r1 // Turn off PDE
 	ldr r1, =(PADS_BANK0_GPIO0_PUE_BITS)
 	orr r0, r1 // Turn on PUE
@@ -78,10 +80,13 @@ setup_i2c:
 	ldr r0, =(I2C0_BASE + I2C_IC_CON_OFFSET)
 	ldr r1, =(I2C_IC_CON_RESET)
 	str r1, [r0]
-	ldr r1, =( \
-		(I2C_IC_CON_MASTER_MODE_BITS & I2C_IC_CON_MASTER_MODE_VALUE_ENABLED) | \
-		(I2C_IC_CON_SPEED_BITS & (I2C_IC_CON_SPEED_VALUE_STANDARD << I2C_IC_CON_SPEED_MSB)) |  \
-		(I2C_IC_CON_IC_SLAVE_DISABLE_BITS & (I2C_IC_CON_IC_SLAVE_DISABLE_VALUE_SLAVE_DISABLED << I2C_IC_CON_IC_SLAVE_DISABLE_MSB)))
+	ldr r1, =(I2C_IC_CON_MASTER_MODE_BITS & I2C_IC_CON_MASTER_MODE_VALUE_ENABLED)
+	add r1, #(I2C_IC_CON_SPEED_VALUE_STANDARD << I2C_IC_CON_SPEED_MSB)
+	add r1, #(I2C_IC_CON_IC_SLAVE_DISABLE_VALUE_SLAVE_DISABLED << I2C_IC_CON_IC_SLAVE_DISABLE_MSB)
+	@ ldr r1, =( \
+	@ 	() | \
+	@ 	(I2C_IC_CON_SPEED_BITS & ()) |  \
+	@ 	(I2C_IC_CON_IC_SLAVE_DISABLE_BITS & (I2C_IC_CON_IC_SLAVE_DISABLE_VALUE_SLAVE_DISABLED << I2C_IC_CON_IC_SLAVE_DISABLE_MSB)))
 	str r1, [r0]
 
 	// Set our own address and target address
@@ -117,7 +122,7 @@ send_test_data:
 
 
 	bl loop_until_tx_fifo_empty
-
+	bl toggle_led
 
 	pop {r0-r3}
 	bx lr
@@ -129,7 +134,8 @@ loop_until_tx_fifo_empty:
 loop_until_tx_fifo_empty_loop:
 	ldr r1, [r0]
 	cmp r1, #0
-	//bl delay
+	bl delay
+	bl toggle_led
 	bne loop_until_tx_fifo_empty_loop
 
 	pop {r0-r1, pc}
@@ -150,4 +156,4 @@ delay_loop:
 
 .data
 clear_disp: .word 0x01
-delay_setting: .word 25
+delay_setting: .word 25000
