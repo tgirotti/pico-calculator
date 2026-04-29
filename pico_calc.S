@@ -94,47 +94,42 @@ lcd_pulse_enable:
     
     pop {r4, r5, pc}
 
-// sends 4 bits to gpio18,18,19,20,21
+// Send 4 bits to GPIO18-21
+// r0 - Nibble to send to the LCD screen
 lcd_send_nibble:
     push {r4, lr}
     ldr r2, =SIO_BASE
 
-       // clear dats pins gpio18,18,19,20,21 mask for 18 19 20 21 is 0x003C0000
-    
+    // Clear GPIO18-21 inclusive
     ldr r3, =0x003C0000
     str r3, [r2, #SIO_GPIO_OUT_CLR_OFFSET]
 
-    // masks incomign data only keeps lower 4 bytes
+    // Nibble mask
     mov r4, #0x0F
-    and r0, r0, r4
+    and r0, r4
 
-    // shfi data up by 18 to align with gpio 18
+    // Align with GPIO18
     lsl r0, r0, #18
     str r0, [r2, #SIO_GPIO_OUT_SET_OFFSET]
 
+	// Pulse LCD so it takes the data we put on 18-21
     bl lcd_pulse_enable
     pop {r4, pc}
 
+// Send one byte to the LCD screen
+// r0 - Byte to send
 lcd_send_byte:
-    push {r4, lr}
-    mov r4, r0
-    ldr r2, =SIO_BASE
+	push {r4, pc}
+	mov r4, r0
+	lsl r0, r4, #4 // High nibble
+	bl lcd_send_nibble
 
-    ldr r3, =(1 << RS_PIN)
-    cmp r1, #0
-    beq rs_low
-    str r3, [r2, #SIO_GPIO_OUT_SET_OFFSET]
-    b send_high
-rs_low:
-    str r3, [r2, #SIO_GPIO_OUT_CLR_OFFSET]
-send_high:
-    lsr r0, r4, #4
-    bl lcd_send_nibble
-    mov r0, r4
-    bl lcd_send_nibble
-    pop {r4, pc}
+	and r0, r4, #0x0F // Low nibble
+	bl lcd_send_nibble
 
-// lcd int
+	pop {r4, pc}
+	
+
 lcd_init:
     push {lr}
 
