@@ -141,45 +141,45 @@ lcd_init:
     str r3, [r2, #SIO_GPIO_OUT_CLR_OFFSET]
 
     // wair 50 ms after power up
-    ldr r0, =50000
+    ldr r0, =100000
     bl delay_us
 
     // sending 0x03 to send back to 8 Bit mode
     mov r1, #0
     mov r0, #0x03
     bl lcd_send_nibble
-    ldr r0, =5000          
+    ldr r0, =5000         
     bl delay_us
 
     // sending 0x03 to send back to 8 Bit mode
     mov r0, #0x03
     bl lcd_send_nibble
-    ldr r0, =200           
+    ldr r0, =2000           
     bl delay_us
 
     // sending 0x03 to send back to 8 Bit mode
     mov r0, #0x03
     bl lcd_send_nibble
-    ldr r0, =200
+    ldr r0, =2000
     bl delay_us
 
     // makes 4 bit mode waits 
     mov r0, #0x02
     bl lcd_send_nibble
-    ldr r0, =200
+    ldr r0, =2000
     bl delay_us
 
     // send full bytes wait 50us after
     mov r1, #0
     mov r0, #0x28          
     bl lcd_send_byte
-    ldr r0, =50
+    ldr r0, =500
     bl delay_us
 
   // display on cusror off, blink off
     mov r0, #0x0C          
     bl lcd_send_byte
-    ldr r0, =50
+    ldr r0, =500
     bl delay_us
 
 
@@ -191,7 +191,7 @@ lcd_init:
 
     mov r0, #0x06          
     bl lcd_send_byte
-    ldr r0, =50
+    ldr r0, =500
     bl delay_us
 
     pop {pc}
