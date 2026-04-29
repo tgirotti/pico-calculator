@@ -24,6 +24,7 @@
 // d7 - 21
 .section .text
 .global pico_calc
+.type pico_calc, %function
 
 pico_calc:                  // main   
     bl gpio_init
@@ -119,16 +120,18 @@ lcd_send_nibble:
 // Send one byte to the LCD screen
 // r0 - Byte to send
 lcd_send_byte:
-	push {r4, pc}
+	push {r4, lr}
 	mov r4, r0
 	lsl r0, r4, #4 // High nibble
 	bl lcd_send_nibble
 
-	and r0, r4, #0x0F // Low nibble
+	mov r0, r4
+	mov r4, #0x0F
+	and r0, r4 // Low nibble
 	bl lcd_send_nibble
 
 	pop {r4, pc}
-	
+
 
 lcd_init:
     push {lr}
