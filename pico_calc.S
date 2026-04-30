@@ -64,8 +64,10 @@ set_pin_sio:
     str r1, [r0]
     pop {r0, r1, pc}
 
-// delay fuction, this fucn overwaires reg 1 2 3, delay is needed to wait for screen to turn on 
+// Delay for number of microseconds
+// r0 - Contains the number of microseconds to stall 
 delay_us:
+    push {r1-r3}
     ldr r2, =TIMER_BASE
     ldr r1, [r2, #TIMER_TIMELR_OFFSET]  // grab start time 
     add r1, r0
@@ -73,13 +75,14 @@ delay_wait:
     ldr r3, [r2, #TIMER_TIMELR_OFFSET]
     cmp r3, r1
     blo delay_wait
+    pop {r1-r3}
     bx lr
 
 // lcd logic
 lcd_pulse_enable:
     // push r4 and r5 so delay doesnt fuck with our pin mask
 
-    push {r4, r5, lr}
+    push {r0, r4, r5, lr}
     ldr r4, =SIO_BASE
     ldr r5, =(1 << E_PIN)
     
@@ -93,7 +96,7 @@ lcd_pulse_enable:
     mov r0, #50
     bl delay_us
     
-    pop {r4, r5, pc}
+    pop {r0, r4, r5, pc}
 
 // Send 4 bits to GPIO18-21
 // r0 - Nibble to send to the LCD screen
@@ -123,7 +126,7 @@ lcd_send_nibble:
 lcd_send_byte:
 	push {r4, lr}
 	mov r4, r0
-    lsl r0, r4, #4 // High nibble
+    lsr r0, r4, #4 // High nibble
 	bl lcd_send_nibble
 
 	mov r0, r4
@@ -137,38 +140,37 @@ lcd_send_byte:
 
 lcd_init:
     push {r0-r3, lr}
+    // Wait 40 ms after power up
+    ldr r0, =40000
+    bl delay_us
 
     // RS (Register Select) must be low for initialization operations
     ldr r2, =SIO_BASE
     ldr r3, =(1 << RS_PIN)
     str r3, [r2, #SIO_GPIO_OUT_CLR_OFFSET]
 
-    // Wait 40 ms after power up
-    ldr r0, =40000
-    bl delay_us
-
-    // sending 0x03 to send back to 8 Bit mode
+    // Datasheet: Function set (Interface is 8 bits long)
     mov r0, #0x03
     bl lcd_send_nibble
-    ldr r0, =5000         
+    ldr r0, =10000      // Wait for more than 4.1ms   
     bl delay_us
 
-    // sending 0x03 to send back to 8 Bit mode
+    // Datasheet: Function set (Interface is 8 bits long)
     mov r0, #0x03
     bl lcd_send_nibble
-    ldr r0, =2000           
+    ldr r0, =400 // Wait for at least 100us           
     bl delay_us
 
-    // sending 0x03 to send back to 8 Bit mode
+    // Datasheet: Last function set
     mov r0, #0x03
     bl lcd_send_nibble
-    ldr r0, =2000
+    ldr r0, =400 // No wait required, but wait anyways
     bl delay_us
 
-    // makes 4 bit mode waits 
+    // Function set should be good, now start actual initialization block
     mov r0, #0x02
     bl lcd_send_nibble
-    ldr r0, =2000
+    ldr r0, =4000
     bl delay_us
 
     // send full bytes wait 50us after
@@ -191,7 +193,7 @@ lcd_init:
      ldr r0, =5000                                                    
     bl delay_us
 
-    mov r0, #0x06          
+    mov r0, #0x06       
     bl lcd_send_byte
     ldr r0, =500
     bl delay_us
