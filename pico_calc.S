@@ -98,7 +98,7 @@ lcd_pulse_enable:
 // Send 4 bits to GPIO18-21
 // r0 - Nibble to send to the LCD screen
 lcd_send_nibble:
-    push {r4, lr}
+    push {r2-r4, lr}
     ldr r2, =SIO_BASE
 
     // Clear GPIO18-21 inclusive
@@ -109,20 +109,21 @@ lcd_send_nibble:
     mov r4, #0x0F
     and r0, r4
 
-    // Align with GPIO18
-    lsl r0, r0, #18
+    // LSB must be aligned with GPIO18
+    // MSB must be aligned with GPIO21
+    lsl r0, #18
     str r0, [r2, #SIO_GPIO_OUT_SET_OFFSET]
 
 	// Pulse LCD so it takes the data we put on 18-21
     bl lcd_pulse_enable
-    pop {r4, pc}
+    pop {r2-r4, pc}
 
 // Send one byte to the LCD screen
 // r0 - Byte to send
 lcd_send_byte:
 	push {r4, lr}
 	mov r4, r0
-  lsl r0, r4, #4 // High nibble
+    lsl r0, r4, #4 // High nibble
 	bl lcd_send_nibble
 
 	mov r0, r4
@@ -135,18 +136,18 @@ lcd_send_byte:
 
 
 lcd_init:
-    push {lr}
+    push {r0-r3, lr}
 
+    // RS (Register Select) must be low for initialization operations
     ldr r2, =SIO_BASE
     ldr r3, =(1 << RS_PIN)
     str r3, [r2, #SIO_GPIO_OUT_CLR_OFFSET]
 
-    // wair 50 ms after power up
-    ldr r0, =100000
+    // Wait 40 ms after power up
+    ldr r0, =40000
     bl delay_us
 
     // sending 0x03 to send back to 8 Bit mode
-    mov r1, #0
     mov r0, #0x03
     bl lcd_send_nibble
     ldr r0, =5000         
@@ -195,7 +196,7 @@ lcd_init:
     ldr r0, =500
     bl delay_us
 
-    pop {pc}
+    pop {r0-r3, pc}
 
 lcd_write_char:
     push {lr}
