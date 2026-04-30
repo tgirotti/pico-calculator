@@ -85,7 +85,7 @@ lcd_pulse_enable:
     
   // e high 
     str r5, [r4, #SIO_GPIO_OUT_SET_OFFSET]  
-    mov r0, #2
+    mov r0, #20
     bl delay_us
     
   // e low
@@ -122,7 +122,7 @@ lcd_send_nibble:
 lcd_send_byte:
 	push {r4, lr}
 	mov r4, r0
-	lsl r0, r4, #4 // High nibble
+  lsl r0, r4, #4 // High nibble
 	bl lcd_send_nibble
 
 	mov r0, r4
@@ -131,6 +131,7 @@ lcd_send_byte:
 	bl lcd_send_nibble
 
 	pop {r4, pc}
+
 
 
 lcd_init:
@@ -186,7 +187,7 @@ lcd_init:
     // clear, data sheet says needs more than 1.52 ms
     mov r0, #0x01          
     bl lcd_send_byte
-     ldr r0, =2000                                                    
+     ldr r0, =5000                                                    
     bl delay_us
 
     mov r0, #0x06          
