@@ -110,7 +110,7 @@ lcd_pulse_enable:
 lcd_send_nibble:
     push {r1-r2, lr}
     // Clear GPIO18-21 (4-bit LCD data pins)
-    mov r2, #0x00_3C_00_00
+    mov r2, #0x003C0000
     ldr r1, =(SIO_BASE + SIO_GPIO_CLR_OFFSET)
     str r2, [r1]
     // Mask off nibble
