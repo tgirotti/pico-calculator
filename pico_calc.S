@@ -13,25 +13,16 @@
 #include "hardware/regs/intctrl.h" // Interrupt registers/bits
 #include "hardware/regs/m0plus.h" // Cortex-M0+ registers (interrupt regs, etc.)
 #include "hardware/regs/pads_bank0.h" // Pad control registers
-//pinout
-.equ RS_PIN, 16     // pin 21 
-.equ E_PIN,  17     // pin 22
 
-// d4 - 18
-// d5 - 19
-// d6 - 20
-// d7 - 21
 .section .text
 .global pico_calc
 .type pico_calc, %function
 
 pico_calc:                  // main   
     bl gpio_init
-    bl lcd_init
-    mov r0, #'7'  //writing 7 to screen
-    bl lcd_write_char
-loop:
-    b loop
+
+idle:
+    b idle
 
 // Initialize GPIO pins
 gpio_init:
@@ -88,131 +79,3 @@ delay_wait:
     blo delay_wait
     pop {r1-r3}
     bx lr
-
-// lcd logic
-lcd_pulse_enable:
-    // push r4 and r5 so delay doesnt fuck with our pin mask
-
-    push {r0, r4, r5, lr}
-    ldr r4, =SIO_BASE
-    ldr r5, =(1 << E_PIN)
-    
-  // e high 
-    str r5, [r4, #SIO_GPIO_OUT_SET_OFFSET]  
-    mov r0, #20
-    bl delay_us
-    
-  // e low
-    str r5, [r4, #SIO_GPIO_OUT_CLR_OFFSET]  
-    mov r0, #50
-    bl delay_us
-    
-    pop {r0, r4, r5, pc}
-
-// Send 4 bits to GPIO18-21
-// r0 - Nibble to send to the LCD screen
-lcd_send_nibble:
-    push {r2-r4, lr}
-    ldr r2, =SIO_BASE
-
-    // Clear GPIO18-21 inclusive
-    ldr r3, =0x003C0000
-    str r3, [r2, #SIO_GPIO_OUT_CLR_OFFSET]
-
-    // Nibble mask
-    mov r4, #0x0F
-    and r0, r4
-
-    // LSB must be aligned with GPIO18
-    // MSB must be aligned with GPIO21
-    lsl r0, #18
-    str r0, [r2, #SIO_GPIO_OUT_SET_OFFSET]
-
-	// Pulse LCD so it takes the data we put on 18-21
-    bl lcd_pulse_enable
-    pop {r2-r4, pc}
-
-// Send one byte to the LCD screen
-// r0 - Byte to send
-lcd_send_byte:
-	push {r4, lr}
-	mov r4, r0
-    lsr r0, r4, #4 // High nibble
-	bl lcd_send_nibble
-
-	mov r0, r4
-	mov r4, #0x0F
-	and r0, r4 // Low nibble
-	bl lcd_send_nibble
-
-	pop {r4, pc}
-
-
-
-lcd_init:
-    push {r0-r3, lr}
-    // Wait 40 ms after power up
-    ldr r0, =40000
-    bl delay_us
-
-    // RS (Register Select) must be low for initialization operations
-    ldr r2, =SIO_BASE
-    ldr r3, =(1 << RS_PIN)
-    str r3, [r2, #SIO_GPIO_OUT_CLR_OFFSET]
-
-    // Datasheet: Function set (Interface is 8 bits long)
-    mov r0, #0x03
-    bl lcd_send_nibble
-    ldr r0, =10000      // Wait for more than 4.1ms   
-    bl delay_us
-
-    // Datasheet: Function set (Interface is 8 bits long)
-    mov r0, #0x03
-    bl lcd_send_nibble
-    ldr r0, =400 // Wait for at least 100us           
-    bl delay_us
-
-    // Datasheet: Last function set
-    mov r0, #0x03
-    bl lcd_send_nibble
-    ldr r0, =400 // No wait required, but wait anyways
-    bl delay_us
-
-    // Function set should be good, now start actual initialization block
-    mov r0, #0x02
-    bl lcd_send_nibble
-    ldr r0, =4000
-    bl delay_us
-
-    // send full bytes wait 50us after
-    mov r1, #0
-    mov r0, #0x28          
-    bl lcd_send_byte
-    ldr r0, =500
-    bl delay_us
-
-  // display on cusror off, blink off
-    mov r0, #0x0C          
-    bl lcd_send_byte
-    ldr r0, =500
-    bl delay_us
-
-
-    // clear, data sheet says needs more than 1.52 ms
-    mov r0, #0x01          
-    bl lcd_send_byte
-     ldr r0, =5000                                                    
-    bl delay_us
-
-    mov r0, #0x06       
-    bl lcd_send_byte
-    ldr r0, =500
-    bl delay_us
-
-    pop {r0-r3, pc}
-
-lcd_write_char:
-    push {lr}
-    mov r1, #1
-    bl lcd_send_byte
-    pop {pc}
