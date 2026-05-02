@@ -105,3 +105,23 @@ lcd_pulse_enable:
 
     pop {r0-r1}
     bx lr
+
+// R0 - Contains the nibble to send. LO bits are discarded.
+lcd_send_nibble:
+    push {r1-r2, lr}
+    // Clear GPIO18-21 (4-bit LCD data pins)
+    mov r2, #0x00_3C_00_00
+    ldr r1, =(SIO_BASE + SIO_GPIO_CLR_OFFSET)
+    str r2, [r1]
+    // Mask off nibble
+    mov r1, #0x0F
+    and r0, r1
+    // Shift nibble to start at GPIO18
+    lsl r0, #18
+    ldr r1, =(SIO_BASE + SIO_GPIO_SET_OFFSET)
+    str r0, [r1] // Set data pins
+    // Strobe enable pin
+    bl lcd_pulse_enable
+
+
+    pop {r0-r2, pc}
