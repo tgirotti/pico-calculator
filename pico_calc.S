@@ -110,7 +110,7 @@ lcd_pulse_enable:
 lcd_send_nibble:
     push {r1-r2, lr}
     // Clear GPIO18-21 (4-bit LCD data pins)
-    ldr r2, =(0x003C0000)
+    ldr r2, =0x003C0000
     ldr r1, =(SIO_BASE + SIO_GPIO_CLR_OFFSET)
     str r2, [r1]
     // Mask off nibble
@@ -125,3 +125,26 @@ lcd_send_nibble:
 
 
     pop {r0-r2, pc}
+
+// R0 - Byte to send
+// R1 - 0 for commands, 1 for data
+lcd_send_byte:
+    push {r1-r3, lr}
+    mov r1, #1
+    cmp r1, #0
+    beq _lcd_send_byte_send_nibbles
+    // Set RS to 1
+    lsl r1, #RS_PIN
+    ldr r2, =(SIO_BASE + SIO_GPIO_SET_OFFSET)
+    str r1, [r2] // Set RS
+_lcd_send_byte_send_nibbles:
+    // Send high nibble
+    mov r3, r0 // r3 has original byte
+    lsr r0, #4 // Align high nibble
+    bl lcd_send_nibble
+    mov r0, r3 // Copy original byte back into r0
+    mov r1, #0x0F
+    and r0, r1
+    bl lcd_send_nibble
+
+    pop {r1-r3, pc}
