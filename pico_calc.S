@@ -3,7 +3,6 @@
 	// 4/26/2026
 	// UMass Lowell EECE.3170 Microprocessors I
 	// Project: RP2040-based Calculator in ARM Assembly
-	
 
 
 #include "hardware/regs/addressmap.h" //Base addresses for all peripheral blocks
@@ -34,35 +33,47 @@ pico_calc:                  // main
 loop:
     b loop
 
-// gpio injt 
+// Initialize GPIO pins
 gpio_init:
     push {lr}
     ldr r2, =SIO_BASE
 
+    // Enable GPIOs as output
     //gipo 16-21 rs, E, d4, d5, d6, d7 as outputs for screen
-    ldr r1, =0x003F0000
+    // GPIO 0-9 for button matrix
+    ldr r1, =0x003F02FF
     str r1, [r2, #SIO_GPIO_OE_SET_OFFSET]
 
-    // counter at pin 16 
-    mov r3, #16
-gpio_loop_data:
-    bl set_pin_sio
-    add r3, #1
-    cmp r3, #22  //check if finished at pin 22
-    blt gpio_loop_data
+    // counter at pin 0 
+    mov r3, #0
+    mov r4, #9 // Loop until 9
+    bl gpio_loop_data
 
+    mov r3, #16
+    mov r4, #22
+    bl gpio_loop_data
     pop {pc}
 
+// R3 - Pin to start
+// R4 - Pin to end at (inclusive)
+gpio_loop_data:
+    push {lr}
+    bl set_pin_sio
+    add r3, #1
+    cmp r3, r4  //check if finished at pin 9
+    ble gpio_loop_data
+    pop {pc}
 
-// set function 5 on pin r3
+// Select Function 5 (SIO) for GPIO pins
 set_pin_sio:
-    push {r0, r1, lr}
+    push {r0-r1}
     ldr r0, =(IO_BANK0_BASE + IO_BANK0_GPIO0_CTRL_OFFSET)
     lsl r1, r3, #3
     add r0, r1
     mov r1, #5
     str r1, [r0]
-    pop {r0, r1, pc}
+    pop {r0-r1}
+    bx lr
 
 // Delay for number of microseconds
 // r0 - Contains the number of microseconds to stall 
