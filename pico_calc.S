@@ -21,6 +21,8 @@
 .equ RS_PIN, 16     // pin 21 
 .equ E_PIN,  17     // pin 22
 
+
+
 pico_calc:                  // main   
     bl gpio_init
     mov r2, #0
@@ -33,6 +35,10 @@ _send_loop:
     bl lcd_send_byte
     add r2, #1
     b _send_loop
+
+    // Display the number 186
+    mov r0, #186
+    bl display_number
 
 idle:
     b idle
@@ -161,6 +167,67 @@ _lcd_send_byte_send_nibbles:
     bl delay_us
 
     pop {r1-r3, pc}
+
+// R0 has divisor
+// R1 has dividend
+// When complete, R0 will have quotient, R1 will have remainder
+hw_divide: // From datasheet, p.32
+    push {r2-r4}
+
+    ldr r3, =(SIO_BASE)
+    // Unsigned
+    str r0, [r3, #SIO_DIV_UDIVIDEND_OFFSET]
+    str r1, [r3, #SIO_DIV_UDIVISOR_OFFSET] // Division will start immediately
+    // Wait 8 cycles for division to complete (per datasheet)
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    nop
+    // Result available
+    ldr r0, [r3, #SIO_DIV_QUOTIENT_OFFSET]
+    ldr r1, [r3, #SIO_DIV_REMAINDER_OFFSET]
+
+    pop {r2-r4}
+    bx lr
+
+// Precondition: r0 contains the number to display
+//               The number is 16 decimal digits or less
+display_number:
+    // TODO: Clear display
+    push {r1-r4, lr}
+    // Get largest digit (1 * (10^i))
+    mov r2, r0 // Original num in r2
+    mov r3, #0 // display_digit loop counter
+_display_number_digit_display_loop:
+    // Exit if we're larger than 16
+    cmp r3, #16
+    bgt _display_number_ret
+    
+    mov r1, #1 // divisor = 1
+    mov r4, #0 // power_of_ten (oop counter)
+_power_ten_loop:
+    cmp r4, r3
+    bge _power_ten_loop_exit
+    // power_of_ten < display_digit
+    mov r5, #10
+    mul r1, r5 // r1 = r1 * 10
+    add r4, #1 // power_of_ten++
+_power_ten_loop_exit:
+    bl hw_divide
+    // r0 = quotient
+    // r1 = remainder
+    // r2 = r2 % 10
+    // Send '0' + r1 to lcd_send_byte with RS=1
+    add r0, #'0'
+    mov r1, #1
+    bl lcd_send_byte
+_display_number_ret:
+    pop {r1-r4, pc}
+
 
 .data
 welcome: .ascii "Welcome!"
