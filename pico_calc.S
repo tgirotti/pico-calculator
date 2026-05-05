@@ -28,7 +28,7 @@ pico_calc:                  // main
     mov r2, #0
 _send_loop:
     cmp r2, #8
-    bge idle
+    bge _send_loop_exit
     ldr r0, =(welcome)
     ldrb r0, [r0, r2] // Load byte-wise to not load entire string
     mov r1, #1 // Enable RS because we're sending data
@@ -36,8 +36,10 @@ _send_loop:
     add r2, #1
     b _send_loop
 
+_send_loop_exit:
     // Display the number 186
-    mov r0, #186
+    bl clear_display
+    ldr r0, =186
     bl display_number
 
 idle:
@@ -144,9 +146,16 @@ lcd_send_nibble:
 // R0 - Byte to send
 // R1 - 0 for commands, 1 for data
 lcd_send_byte:
-    cmp r1, #0 // Is data (characters)?
-    push {r1-r3, lr}
-    beq _lcd_send_byte_send_nibbles
+    mov r4, r1 // Copy is_data to r4
+    push {r1-r4, lr}
+    // Clear RS
+    mov r1, #1
+    lsl r1, #RS_PIN
+    ldr r2, =(SIO_BASE + SIO_GPIO_OUT_CLR_OFFSET)
+    str r1, [r2]
+
+    cmp r4, #0 // Is data (characters)?
+    beq _lcd_send_byte_send_nibbles // This beq from the cmp from the start of the function before we push r1
     // Is data, set RS
     mov r1, #1
     lsl r1, #RS_PIN
@@ -166,13 +175,13 @@ _lcd_send_byte_send_nibbles:
     ldr r0, =500
     bl delay_us
 
-    pop {r1-r3, pc}
+    pop {r1-r4, pc}
 
 // R0 has divisor
 // R1 has dividend
 // When complete, R0 will have quotient, R1 will have remainder
 hw_divide: // From datasheet, p.32
-    push {r2-r4}
+    push {r2-r3}
 
     ldr r3, =(SIO_BASE)
     // Unsigned
@@ -191,21 +200,22 @@ hw_divide: // From datasheet, p.32
     ldr r0, [r3, #SIO_DIV_QUOTIENT_OFFSET]
     ldr r1, [r3, #SIO_DIV_REMAINDER_OFFSET]
 
-    pop {r2-r4}
+    pop {r2-r3}
     bx lr
 
 // Precondition: r0 contains the number to display
 //               The number is 16 decimal digits or less
+// NOTE: It is the CALLEE's responsibility to clear the display before executing
 display_number:
-    // TODO: Clear display
+    // Reverse the order for display on screen
     push {r1-r4, lr}
     // Get largest digit (1 * (10^i))
     mov r2, r0 // Original num in r2
-    mov r3, #0 // display_digit loop counter
+    mov r3, #15 // display_digit loop counter (starts from 15 to decrement, 15-0 inclusive = 16 cols)
 _display_number_digit_display_loop:
-    // Exit if we're larger than 16
-    cmp r3, #16
-    bgt _display_number_ret
+    // Exit if we're larger than 16 columns of display
+    cmp r3, #0
+    ble _display_number_ret
     
     mov r1, #1 // divisor = 1
     mov r4, #0 // power_of_ten (oop counter)
@@ -216,17 +226,39 @@ _power_ten_loop:
     mov r5, #10
     mul r1, r5 // r1 = r1 * 10
     add r4, #1 // power_of_ten++
+    b _power_ten_loop // continue loop
 _power_ten_loop_exit:
+    // Copy r2 into r0 now that we know what to divide by
+    mov r0, r2
+    // Divisor still in r1, original digit still in r0
     bl hw_divide
     // r0 = quotient
     // r1 = remainder
-    // r2 = r2 % 10
-    // Send '0' + r1 to lcd_send_byte with RS=1
+    mov r1, #10
+    bl hw_divide // digit % 10 = extracted_digit
+    // Send '0' + extracted_digit to display
+    mov r0, r1 // r0 is our digit
     add r0, #'0'
     mov r1, #1
     bl lcd_send_byte
+    // display_digit--
+    sub r3, #1
+    b _display_number_digit_display_loop
 _display_number_ret:
     pop {r1-r4, pc}
+
+// Clears the display
+clear_display:
+    push {r0-r1, lr}
+
+    mov r0, #0x01 // Clear display instruction
+    mov r1, #0x00 // Command
+    bl lcd_send_byte
+    // Wait >1.52ms
+    ldr r0, =1520
+    bl delay_us
+
+    pop {r0-r1, pc}
 
 
 .data
