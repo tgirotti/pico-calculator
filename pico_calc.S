@@ -23,13 +23,23 @@
 
 pico_calc:                  // main   
     bl gpio_init
+    mov r2, #0
+_send_loop:
+    cmp r2, #8
+    bge idle
+    ldr r0, =(welcome)
+    ldrb r0, [r0, r2] // Load byte-wise to not load entire string
+    mov r1, #1 // Enable RS because we're sending data
+    bl lcd_send_byte
+    add r2, #1
+    b _send_loop
 
 idle:
     b idle
 
 // Initialize GPIO pins
 gpio_init:
-    push {lr}
+    push {r0-r4, lr}
     ldr r2, =SIO_BASE
 
     // Enable GPIOs as output
@@ -46,7 +56,7 @@ gpio_init:
     mov r3, #16
     mov r4, #22
     bl gpio_loop_data
-    pop {pc}
+    pop {r0-r4, pc}
 
 // R3 - Pin to start
 // R4 - Pin to end at (inclusive)
@@ -84,12 +94,12 @@ delay_wait:
     bx lr
 
 lcd_pulse_enable:
-    push {r0-r2}
+    push {r0-r2, lr}
 
     // Set Enable HI
     mov r0, #1
     lsl r0, #E_PIN
-    ldr r1, =(SIO_BASE + SIO_GPIO_SET_OFFSET)
+    ldr r1, =(SIO_BASE + SIO_GPIO_OUT_SET_OFFSET)
     str r0, [r1] // Set pin HI
     // Sleep 20us
     mov r0, #20
@@ -97,54 +107,60 @@ lcd_pulse_enable:
     // Set Enable LO
     mov r0, #1
     lsl r0, #E_PIN
-    ldr r1, =(SIO_BASE + SIO_GPIO_CLR_OFFSET)
+    ldr r1, =(SIO_BASE + SIO_GPIO_OUT_CLR_OFFSET)
     str r0, [r1] // Set pin LO
     // Sleep 50us
     mov r0, #20
     bl delay_us
 
-    pop {r0-r1}
-    bx lr
+    pop {r0-r2, pc}
 
 // R0 - Contains the nibble to send. LO bits are discarded.
 lcd_send_nibble:
     push {r1-r2, lr}
     // Clear GPIO18-21 (4-bit LCD data pins)
     ldr r2, =0x003C0000
-    ldr r1, =(SIO_BASE + SIO_GPIO_CLR_OFFSET)
+    ldr r1, =(SIO_BASE + SIO_GPIO_OUT_CLR_OFFSET)
     str r2, [r1]
     // Mask off nibble
     mov r1, #0x0F
     and r0, r1
     // Shift nibble to start at GPIO18
     lsl r0, #18
-    ldr r1, =(SIO_BASE + SIO_GPIO_SET_OFFSET)
+    ldr r1, =(SIO_BASE + SIO_GPIO_OUT_SET_OFFSET)
     str r0, [r1] // Set data pins
     // Strobe enable pin
     bl lcd_pulse_enable
 
 
-    pop {r0-r2, pc}
+    pop {r1-r2, pc}
 
 // R0 - Byte to send
 // R1 - 0 for commands, 1 for data
 lcd_send_byte:
+    cmp r1, #0 // Is data (characters)?
     push {r1-r3, lr}
-    mov r1, #1
-    cmp r1, #0
     beq _lcd_send_byte_send_nibbles
-    // Set RS to 1
+    // Is data, set RS
+    mov r1, #1
     lsl r1, #RS_PIN
-    ldr r2, =(SIO_BASE + SIO_GPIO_SET_OFFSET)
-    str r1, [r2] // Set RS
+    ldr r2, =(SIO_BASE + SIO_GPIO_OUT_SET_OFFSET)
+    str r1, [r2]
 _lcd_send_byte_send_nibbles:
     // Send high nibble
     mov r3, r0 // r3 has original byte
     lsr r0, #4 // Align high nibble
     bl lcd_send_nibble
+
     mov r0, r3 // Copy original byte back into r0
     mov r1, #0x0F
-    and r0, r1
+    and r0, r1 // Mask off low nibble
     bl lcd_send_nibble
 
+    ldr r0, =500
+    bl delay_us
+
     pop {r1-r3, pc}
+
+.data
+welcome: .ascii "Welcome!"
