@@ -88,7 +88,7 @@
         //read columns
         ldr r6, [r4, #SIO_GPIO_IN_OFFSET]
         ldr r7, =0x3E0         
-        and r6, r7
+        and r6, r6, r7
         
         //check if col went low
         cmp r6, r7              
@@ -98,10 +98,10 @@
 
     col_check:
         mov r3, #1
-        lsl r3, r2
+        lsl r3, r3, r2
         tst r6, r3
         beq key_pressed    
-        add r2, #1
+        add r2, r2, #1
         cmp r2, #10
         blt col_check
 
@@ -119,8 +119,8 @@
         mov r0, r5
         mov r1, #5
         mul r0, r1
-        sub r2, #5
-        add r0, r2
+        sub r2, r2, #5
+        add r0, r0, r2
         ldr r1, =key_map//inset where we have all asci values
         ldrb r0, [r1, r0]
         pop {r4-r7, pc}
