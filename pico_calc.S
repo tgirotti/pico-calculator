@@ -165,27 +165,40 @@ gpio_init:
     mov r1, #KBD_ROW_MASK
     str r1, [r2, #SIO_GPIO_OUT_SET_OFFSET]
 
-    ldr r1, =0x003F001F       
+    ldr r1, =0x003F001F
     str r1, [r2, #SIO_GPIO_OE_SET_OFFSET]
 
-    ldr r1, =KBD_COL_MASK     
+    ldr r1, =KBD_COL_MASK
     str r1, [r2, #SIO_GPIO_OE_CLR_OFFSET]
 
     pop {r0-r4, pc}
 
+
 // R3 - Pin to start
-// R4 - Pin to end at (inclusive)
+// R4 - Pin to end at inclusive
 gpio_loop_data:
     push {lr}
+
+gpio_loop_data_loop:
+    bl set_pin_sio
+    add r3, r3, #1
+    cmp r3, r4
+    ble gpio_loop_data_loop
+
+    pop {pc}
+
 
 // Select Function 5 (SIO) for GPIO pins
 set_pin_sio:
     push {r0-r1}
+
     ldr r0, =(IO_BANK0_BASE + IO_BANK0_GPIO0_CTRL_OFFSET)
     lsl r1, r3, #3
-    add r0, r1
+    add r0, r0, r1
+
     mov r1, #5
     str r1, [r0]
+
     pop {r0-r1}
     bx lr
 
