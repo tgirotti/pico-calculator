@@ -47,8 +47,7 @@
         ldr r0, =186
         bl display_number
 
-    idle:
-        b idle
+
 
     main_loop:
         bl scan_keyboard
@@ -313,7 +312,7 @@
         mov r3, #15 // display_digit loop counter (starts from 15 to decrement, 15-0 inclusive = 16 cols)
     _display_number_digit_display_loop:
         cmp r3, #0
-        ble _display_number_ret
+        blt _display_number_ret
         
         mov r1, #1 // divisor = 1
         mov r4, #0 // power_of_ten (oop counter)
