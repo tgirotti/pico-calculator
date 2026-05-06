@@ -151,33 +151,32 @@ kbd_loop:
 // Initialize GPIO pins
 gpio_init:
     push {r0-r4, lr}
-    ldr r2, =SIO_BASE
 
-    // Enable GPIOs as output
-    //gipo 16-21 rs, E, d4, d5, d6, d7 as outputs for screen
-    // GPIO 0-9 for button matrix
-    ldr r1, =0x003F02FF
-    str r1, [r2, #SIO_GPIO_OE_SET_OFFSET]
-
-    // counter at pin 0 
     mov r3, #0
-    mov r4, #9 // Loop until 9
+    mov r4, #9
     bl gpio_loop_data
 
     mov r3, #16
-    mov r4, #22
+    mov r4, #21
     bl gpio_loop_data
+
+    ldr r2, =SIO_BASE
+
+    mov r1, #KBD_ROW_MASK
+    str r1, [r2, #SIO_GPIO_OUT_SET_OFFSET]
+
+    ldr r1, =0x003F001F       
+    str r1, [r2, #SIO_GPIO_OE_SET_OFFSET]
+
+    ldr r1, =KBD_COL_MASK     
+    str r1, [r2, #SIO_GPIO_OE_CLR_OFFSET]
+
     pop {r0-r4, pc}
 
 // R3 - Pin to start
 // R4 - Pin to end at (inclusive)
 gpio_loop_data:
     push {lr}
-    bl set_pin_sio
-    add r3, #1
-    cmp r3, r4  //check if finished at pin 9
-    ble gpio_loop_data
-    pop {pc}
 
 // Select Function 5 (SIO) for GPIO pins
 set_pin_sio:
