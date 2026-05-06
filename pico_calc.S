@@ -33,7 +33,7 @@
 
     main_loop:
         bl scan_keyboard
-        cmp r0, #0 //seeing if button is prsd
+        cmp r0, #0xFF //seeing if button is prsd
         beq main_loop //if not pressed keeps gong
 
         mov r4, r0 // if prsd display
@@ -41,12 +41,12 @@
         bl lcd_send_byte
 
     wait_for_button:
-        ldr r0, =50000 50 ms  //waits for button to bounce back so doesnt press twic
+        ldr r0, =50000   //waits for button to bounce back so doesnt press twic
         bl delay_us
 
-        bl scan_keypad 
-        cmp r0, #0
-        bne wait_for_release //stays till it is released
+        bl scan_keyboard 
+        cmp r0, #0xFF
+        bne wait_for_button //stays till it is released
 
         b main_loop
 
@@ -70,7 +70,8 @@
         //read columns
         ldr r6, [r4, #SIO_GPIO_IN_OFFSET]
         ldr r7, =0x3E0         
-
+        and r6, r7
+        
         //check if col went low
         cmp r6, r7              
         beq _next_row
@@ -90,11 +91,13 @@
         add r5, #1
         cmp r5, #5
         blt row_check
-        mov r0, #0       //nothting prssed
+        mov r0, #0xFF          //nothting prssed
         pop {r4-r7, pc}
 
     key_pressed:
         // index     (row * 5) + (col - 5)
+        mov r1, #0x1F
+        str r1, [r4, #SIO_GPIO_OUT_SET_OFFSET] 
         mov r0, r5
         mov r1, #5
         mul r0, r1
@@ -213,7 +216,7 @@
         ldr r1, =(SIO_BASE + SIO_GPIO_OUT_CLR_OFFSET)
         str r0, [r1] // Set pin LO
         // Sleep 50us
-        mov r0, #20
+        mov r0, #50
         bl delay_us
 
         pop {r0-r2, pc}
@@ -241,8 +244,9 @@
     // R0 - Byte to send
     // R1 - 0 for commands, 1 for data
     lcd_send_byte:
+        push {r1-r4, lr}//save than copy
+    
         mov r4, r1 // Copy is_data to r4
-        push {r1-r4, lr}
         // Clear RS
         mov r1, #1
         lsl r1, #RS_PIN
@@ -303,12 +307,11 @@
     // NOTE: It is the CALLEE's responsibility to clear the display before executing
     display_number:
         // Reverse the order for display on screen
-        push {r1-r4, lr}
+        push {r1-r5, lr}
         // Get largest digit (1 * (10^i))
         mov r2, r0 // Original num in r2
         mov r3, #15 // display_digit loop counter (starts from 15 to decrement, 15-0 inclusive = 16 cols)
     _display_number_digit_display_loop:
-        // Exit if we're larger than 16 columns of display
         cmp r3, #0
         ble _display_number_ret
         
@@ -340,7 +343,7 @@
         sub r3, #1
         b _display_number_digit_display_loop
     _display_number_ret:
-        pop {r1-r4, pc}
+        pop {r1-r5, pc}
 
     // Clears the display
     clear_display:
