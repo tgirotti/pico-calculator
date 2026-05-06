@@ -20,12 +20,93 @@
 
 .equ RS_PIN, 16     // pin 21 
 .equ E_PIN,  17     // pin 22
-
+//kbd rows gpio 0-4
+//kbd cols gpio 5-9
 
 
 pico_calc:                  // main   
     bl gpio_init
-    mov r2, #0
+    bl keypad_pad_init
+    bl lcd_init   
+    bl clear_display
+
+
+main_loop
+    bl scan_keyboard
+    cmp r0, #0 //seeing if button is prsd
+    beq main_loop //if not pressed keeps gong
+
+    mov r4, r0 // if prsd display
+    mov r1, #1
+    bl lcd_send_byte
+
+    wait_for_button
+    ldr r0, =50000 50 ms  //waits for button to bounce back so doesnt press twic
+    bl delay_us
+
+    bl scan_keypad 
+    cmp r0, #0
+    bne wait_for_release //stays till it is released
+
+    b main_loop
+
+scan_keyboard:
+    push {r4-r7, lr}
+    ldr r4, =SIO_BASE
+    mov r5, #0 
+
+row_check:
+    mov r1, #0x1F           //setting high
+    str r1, [r4, #SIO_GPIO_OUT_SET_OFFSET]
+
+    mov r1, #1
+    lsl r1, r5
+    str r1, [r4, #SIO_GPIO_OUT_CLR_OFFSET]
+    //current row low
+
+    mov r0, #10
+    bl delay_us  //adding delay inbetween sweeps
+
+    //read columns
+    ldr r6, [r4, #SIO_GPIO_IN_OFFSET]
+    ldr r7, =0x3E0         
+
+    //check if col went low
+    cmp r6, r7              
+    beq _next_row
+    // find what col went low
+    mov r2, #5    
+
+col_check:
+    mov r3, #1
+    lsl r3, r2
+    tst r6, r3
+    beq key_pressed    
+    add r2, #1
+    cmp r2, #10
+    blt col_check
+
+next_row:
+    add r5, #1
+    cmp r5, #5
+    blt row_check
+    mov r0, #0       //nothting prssed
+    pop {r4-r7, pc}
+
+key_pressed:
+    // index     (row * 5) + (col - 5)
+    mov r0, r5
+    mov r1, #5
+    mul r0, r1
+    sub r2, #5
+    add r0, r2
+    ldr r1, =//inset where we have all asci values
+    ldrb r0, [r1, r0]
+    pop {r4-r7, pc}
+
+
+
+
 _send_loop:
     cmp r2, #8
     bge _send_loop_exit
