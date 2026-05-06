@@ -78,7 +78,7 @@
         str r1, [r4, #SIO_GPIO_OUT_SET_OFFSET]
 
         mov r1, #1
-        lsl r1, r5
+        lsl r1, r1, r5
         str r1, [r4, #SIO_GPIO_OUT_CLR_OFFSET]
         //current row low
 
@@ -92,7 +92,7 @@
         
         //check if col went low
         cmp r6, r7              
-        beq _next_row
+        beq next_row
         // find what col went low
         mov r2, #5    
 
