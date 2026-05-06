@@ -26,7 +26,6 @@
 
 pico_calc:                  // main   
     bl gpio_init
-    bl keypad_pad_init
     bl lcd_init   
     bl clear_display
 
