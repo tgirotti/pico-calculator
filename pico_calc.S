@@ -29,7 +29,26 @@
         bl kbd_init
         bl lcd_init   
         bl clear_display
+        mov r2, #0
 
+    _send_loop:
+        cmp r2, #8
+        bge _send_loop_exit
+        ldr r0, =(welcome)
+        ldrb r0, [r0, r2] // Load byte-wise to not load entire string
+        mov r1, #1 // Enable RS because we're sending data
+        bl lcd_send_byte
+        add r2, #1
+        b _send_loop
+
+    _send_loop_exit:
+        // Display the number 186
+        bl clear_display
+        ldr r0, =186
+        bl display_number
+
+    idle:
+        b idle
 
     main_loop:
         bl scan_keyboard
@@ -103,7 +122,7 @@
         mul r0, r1
         sub r2, #5
         add r0, r2
-        ldr r1, =//inset where we have all asci values
+        ldr r1, =key_map//inset where we have all asci values
         ldrb r0, [r1, r0]
         pop {r4-r7, pc}
 
@@ -123,25 +142,6 @@
         ble kbd_loop
         pop {pc}
 
-
-    _send_loop:
-        cmp r2, #8
-        bge _send_loop_exit
-        ldr r0, =(welcome)
-        ldrb r0, [r0, r2] // Load byte-wise to not load entire string
-        mov r1, #1 // Enable RS because we're sending data
-        bl lcd_send_byte
-        add r2, #1
-        b _send_loop
-
-    _send_loop_exit:
-        // Display the number 186
-        bl clear_display
-        ldr r0, =186
-        bl display_number
-
-    idle:
-        b idle
 
     // Initialize GPIO pins
     gpio_init:
@@ -359,5 +359,13 @@
         pop {r0-r1, pc}
 
 
-    .data
+.data
     welcome: .ascii "Welcome!"
+
+.align 2
+key_map:
+    .ascii "789  "      //row 1
+    .ascii "456  "      //row 2
+    .ascii "123- "      //row 3
+    .ascii "0=+  "      //roe 4
+    .ascii "     "      //row 5     
