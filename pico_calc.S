@@ -23,6 +23,9 @@
 //kbd rows gpio 0-4
 //kbd cols gpio 5-9
 
+.equ KBD_ROW_MASK, 0x0000001F//gpio 0 -4 
+.equ KBD_COL_MASK, 0x000003E0//gpio 5-9
+
 
 pico_calc:                  // main   
     bl gpio_init
