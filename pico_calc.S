@@ -4,7 +4,7 @@
     // UMass Lowell EECE.3170 Microprocessors I
     // Project: RP2040-based Calculator in ARM Assembly
 
-
+// Includes for named memory addresses from the datasheet
 #include "hardware/regs/addressmap.h" //Base addresses for all peripheral blocks
 #include "pico/asm_helper.S" // Named memory-mapped registers
 #include "hardware/regs/io_bank0.h" // IO Bank registers
@@ -14,64 +14,64 @@
 #include "hardware/regs/m0plus.h" // Cortex-M0+ registers (interrupt regs, etc.)
 #include "hardware/regs/pads_bank0.h" // Pad control registers
 
-.section .text
-.global pico_calc
-.type pico_calc, %function
+.section .text // Code section
+.global pico_calc // Global identifier (for exporting to `main.c`)
+.type pico_calc, %function // Type of the global identifier is a function
 
-.equ RS_PIN, 16     // pin 21 
-.equ E_PIN,  17     // pin 22
+.equ RS_PIN, 16     // pin 21  // Like #define in C, register-select pin for the LCD
+.equ E_PIN,  17     // pin 22 // Like #define in C, enable pin for the LCD
 //kbd rows gpio 0-4
 //kbd cols gpio 5-9
 
-.equ KBD_ROW_MASK, 0x0000001F//gpio 0 -4 
-.equ KBD_COL_MASK, 0x000003E0//gpio 5-9
+.equ KBD_ROW_MASK, 0x0000001F//gpio 0 -4  // Bitmask corresponding to GPIO 0-4
+.equ KBD_COL_MASK, 0x000003E0//gpio 5-9   // Mask for GPIO 5-9
 
 
-pico_calc:                  // main   
-    bl gpio_init
-    bl kbd_init
-    bl lcd_init   
-    bl clear_display
-    mov r2, #0
+pico_calc:                  // main   // Main label
+    bl gpio_init // Call gpio_init subroutine with link (inits GPIO pins)
+    bl kbd_init  // Call kbd_init subroutine wih link (sets up keypad stuff)
+    bl lcd_init  // Call lcd_init subroutine with link (sets up screen)
+    bl clear_display // Call clear_display subroutine with link (clears the LCD screen)
+    mov r2, #0 // r2 is the counter for _send_loop
 
-_send_loop:
-    cmp r2, #8
-    bge _send_loop_exit
-    ldr r0, =(welcome)
+_send_loop: // Loop to send "Welcome!" to the screen for testing
+    cmp r2, #8 // Is r2 >= 8?
+    bge _send_loop_exit // If so, we should exit the loop
+    ldr r0, =(welcome) // Otherwise, load the address of the first byte of our text string
     ldrb r0, [r0, r2] // Load byte-wise to not load entire string
     mov r1, #1 // Enable RS because we're sending data
-    bl lcd_send_byte
-    add r2, #1
-    b _send_loop
+    bl lcd_send_byte // Branch with link to lcd_send_byte to send the ASCII character to the LCD
+    add r2, #1 // Increment loop counter
+    b _send_loop // Go back to beginning of loop
 
-_send_loop_exit:
+_send_loop_exit: // Label for exit of loop
     // Display the number 186
-    bl clear_display
-    ldr r0, =186
-    bl display_number
+    bl clear_display // Clear display before we test displaying a number
+    ldr r0, =186 // Load 186 into r0, the number we will display
+    bl display_number // Call display_number
 
 
 
-main_loop:
-    bl scan_keyboard
-    cmp r0, #0xFF //seeing if button is prsd
+main_loop: // Main program loop: Continuously scan keypad for button presses and display them on LCD
+    bl scan_keyboard // Call keyboard scan subroutine
+    cmp r0, #0xFF //seeing if button is pressed
     beq main_loop //if not pressed keeps gong
 
-    mov r4, r0 // if prsd display
-    mov r1, #1
-    bl lcd_send_byte
+    mov r4, r0 // If pressed, display the number
+    mov r1, #1 // We're sending a character, not a command, so RS must be set when sending byte
+    bl lcd_send_byte // Actually display the key we pressed
 
-wait_for_button:
+wait_for_button: // Subroutine to debounce a button
     ldr r0, =50000   //waits for button to bounce back so doesnt press twic
-    bl delay_us
+    bl delay_us // Delay by 50 * 10^3 us (50ms)
 
-    bl scan_keyboard 
-    cmp r0, #0xFF
-    bne wait_for_button //stays till it is released
+    bl scan_keyboard // Once delay is over, scan the keyboard again to get the currently pressed keys
+    cmp r0, #0xFF // Are any buttons pressed?
+    bne wait_for_button // Keep waiting for button to be released before continuing
 
-    b main_loop
+    b main_loop // No more buttons are being pressed, so we can go back to main loop
 
-scan_keyboard:
+scan_keyboard: // Test and scan keyboard subroutine (TODO: Nick Comments)
     push {r4-r7, lr}
     ldr r4, =SIO_BASE
     mov r5, #0 
@@ -150,28 +150,28 @@ kbd_loop:
 
 // Initialize GPIO pins
 gpio_init:
-    push {r0-r4, lr}
+    push {r0-r4, lr} // Push any registers we use to the stack (no enforced calling convention)
 
-    mov r3, #0
-    mov r4, #9
-    bl gpio_loop_data
+    mov r3, #0 // Start with GPIO 0
+    mov r4, #9 // End with GPIO 9
+    bl gpio_loop_data // Set up all the pads for GPIO 0-9 inclusive
 
-    mov r3, #16
-    mov r4, #21
-    bl gpio_loop_data
+    mov r3, #16 // Start with GPIO 16
+    mov r4, #21 // End with GPIO 21
+    bl gpio_loop_data // Pad setup for 16-21 inclusive
+ 
+    ldr r2, =SIO_BASE // r2 has the address of SIO_BASE memory-mapped register
 
-    ldr r2, =SIO_BASE
+    mov r1, #KBD_ROW_MASK // r1 has the GPIO pins used for the rows in the keypad
+    str r1, [r2, #SIO_GPIO_OUT_SET_OFFSET] // TODO: This might be a bug, 
 
-    mov r1, #KBD_ROW_MASK
-    str r1, [r2, #SIO_GPIO_OUT_SET_OFFSET]
+    ldr r1, =0x003F001F // TODO: What is this mask?
+    str r1, [r2, #SIO_GPIO_OE_SET_OFFSET] // 
 
-    ldr r1, =0x003F001F
-    str r1, [r2, #SIO_GPIO_OE_SET_OFFSET]
+    ldr r1, =KBD_COL_MASK // r1 has the mask for the GPIO pins used for columns
+    str r1, [r2, #SIO_GPIO_OE_CLR_OFFSET] // Clear all the column pins
 
-    ldr r1, =KBD_COL_MASK
-    str r1, [r2, #SIO_GPIO_OE_CLR_OFFSET]
-
-    pop {r0-r4, pc}
+    pop {r0-r4, pc} // Pop r0-r4 off the stack and pop pc, which will set pc = lr from when we pushed it
 
 
 // R3 - Pin to start
@@ -204,9 +204,10 @@ set_pin_sio:
 
 // Delay for number of microseconds
 // r0 - Contains the number of microseconds to stall 
+// NOTE: This code is from Lecture ## TODO
 delay_us:
-    push {r1-r3}
-    ldr r2, =TIMER_BASE
+    push {r1-r3} // Push r1-r3 onto the stack (we will overwrite them)
+    ldr r2, =TIMER_BASE // r2 has the address of TIMER_BASE from datasheet
     ldr r1, [r2, #TIMER_TIMELR_OFFSET]  // grab start time 
     add r1, r0
 delay_wait:
@@ -216,6 +217,7 @@ delay_wait:
     pop {r1-r3}
     bx lr
 
+// NOTE: This code was translated from Arias' C code (TODO: specify lines)
 lcd_pulse_enable:
     push {r0-r2, lr}
 
@@ -239,29 +241,31 @@ lcd_pulse_enable:
     pop {r0-r2, pc}
 
 // R0 - Contains the nibble to send. LO bits are discarded.
+// NOTE: This code translated from Arias TODO
 lcd_send_nibble:
-    push {r1-r2, lr}
-    // Clear GPIO18-21 (4-bit LCD data pins)
-    ldr r2, =0x003C0000
-    ldr r1, =(SIO_BASE + SIO_GPIO_OUT_CLR_OFFSET)
-    str r2, [r1]
+    push {r1-r2, lr} // Push our used registers r1-r2 onto the stack, and push lr since we're an intermediate function (non-leaf)
+    // Clear GPIO18-21 of any old data (4-bit LCD data pins)
+    ldr r2, =0x003C0000 // r2 has mask for GPIO pins 18-21
+    ldr r1, =(SIO_BASE + SIO_GPIO_OUT_CLR_OFFSET) // r1 has the GPIO_OUT_CLR register
+    str r2, [r1] // Clear GPIO 18-21
     // Mask off nibble
-    mov r1, #0x0F
-    and r0, r1
-    // Shift nibble to start at GPIO18
-    lsl r0, #18
-    ldr r1, =(SIO_BASE + SIO_GPIO_OUT_SET_OFFSET)
-    str r0, [r1] // Set data pins
+    mov r1, #0x0F // Mask to only keep the LOW part of the byte
+    and r0, r1 // Bitwise AND, and now r0 only has the LOW part of the original byte
+    
+    lsl r0, #18 // Left-shift nibble to start at GPIO18
+    ldr r1, =(SIO_BASE + SIO_GPIO_OUT_SET_OFFSET) 
+    str r0, [r1] // Set the data pins we wanted to send to the LCD screen
     // Strobe enable pin
-    bl lcd_pulse_enable
+    bl lcd_pulse_enable // Pulses the enable pin so the screen takes our data
 
 
-    pop {r1-r2, pc}
+    pop {r1-r2, pc} // Pop our used registers r1-r2 off the stack, and return to our caller
 
 // R0 - Byte to send
 // R1 - 0 for commands, 1 for data
+// NOTE: This was taken from Arias' C code TODO
 lcd_send_byte:
-    push {r1-r4, lr}//save than copy
+    push {r1-r4, lr} // TODO: This doesn't do what we want it to do
 
     mov r4, r1 // Copy is_data to r4
     // Clear RS
@@ -293,17 +297,19 @@ _lcd_send_byte_send_nibbles:
 
     pop {r1-r4, pc}
 
-// R0 has divisor
-// R1 has dividend
+// R0 has dividend
+// R1 has divisor
 // When complete, R0 will have quotient, R1 will have remainder
+// NOTE: This code adapted from RP2040 datasheet, p.32
 hw_divide: // From datasheet, p.32
-    push {r2-r3}
+    push {r2-r3} // We're using r2-r3 as local vars so push them to stack
 
-    ldr r3, =(SIO_BASE)
+    ldr r3, =(SIO_BASE) // Load the SIO base
     // Unsigned
-    str r0, [r3, #SIO_DIV_UDIVIDEND_OFFSET]
-    str r1, [r3, #SIO_DIV_UDIVISOR_OFFSET] // Division will start immediately
+    str r0, [r3, #SIO_DIV_UDIVIDEND_OFFSET] // Put the dividend (# we want to divide) into the unsigned dividend reg
+    str r1, [r3, #SIO_DIV_UDIVISOR_OFFSET] // Put divisor in unsigned divisor reg, and now the divider will take 8 cycles
     // Wait 8 cycles for division to complete (per datasheet)
+    nop // No operation (do nothing)
     nop
     nop
     nop
@@ -311,34 +317,38 @@ hw_divide: // From datasheet, p.32
     nop
     nop
     nop
-    nop
-    // Result available
-    ldr r0, [r3, #SIO_DIV_QUOTIENT_OFFSET]
-    ldr r1, [r3, #SIO_DIV_REMAINDER_OFFSET]
+    // Result now available
+    ldr r0, [r3, #SIO_DIV_QUOTIENT_OFFSET] // Load r0 with the quotient from the divider
+    ldr r1, [r3, #SIO_DIV_REMAINDER_OFFSET] // Load r0 with the remainder from the divider
 
-    pop {r2-r3}
-    bx lr
+    pop {r2-r3} // Done with r2-r3, pop them from the stack
+    bx lr // Return to the caller
+
 
 // Precondition: r0 contains the number to display
 //               The number is 16 decimal digits or less
 // NOTE: It is the CALLEE's responsibility to clear the display before executing
 display_number:
     // Reverse the order for display on screen
-    push {r1-r5, lr}
+    push {r1-r5, lr} // Push r1-r5 to the stack so we can use them as locals, and lr since we call hw_divide later
     // Get largest digit (1 * (10^i))
     mov r2, r0 // Original num in r2
     mov r3, #15 // display_digit loop counter (starts from 15 to decrement, 15-0 inclusive = 16 cols)
+// The idea of this loop is to perform the following:
+// `extracted_digit = (original_number / tens_place) % 10`
+// for all digits
 _display_number_digit_display_loop:
-    cmp r3, #0
-    blt _display_number_ret
+    cmp r3, #0 // Are we at the end of the loop?
+    blt _display_number_ret // Acts like `for (i = 15; i >= 0, i--)` in C, we exit the loop once !(i >= 0) is true i.e. i < 0
     
-    mov r1, #1 // divisor = 1
-    mov r4, #0 // power_of_ten (oop counter)
-_power_ten_loop:
-    cmp r4, r3
-    bge _power_ten_loop_exit
+    mov r1, #1 // Start with 1 as our divisor
+    mov r4, #0 // power_of_ten (loop counter)
+_power_ten_loop: // Loop to find out which power of 10 (tens_place) we need to divide by
+                 // based on the digit we're trying to display
+    cmp r4, r3 // We've found the power of 10 to divide by, so we should exit
+    bge _power_ten_loop_exit // Positive incrementing loop, so acts like `for (i = 0; i < display_digit; i++)` to find power of 10
     // power_of_ten < display_digit
-    mov r5, #10
+    mov r5, #10 // Multiplying by 10
     mul r1, r5 // r1 = r1 * 10
     add r4, #1 // power_of_ten++
     b _power_ten_loop // continue loop
@@ -349,20 +359,23 @@ _power_ten_loop_exit:
     bl hw_divide
     // r0 = quotient
     // r1 = remainder
-    mov r1, #10
+    mov r1, #10 // Need to perform the `% 10` to get the actual digit
     bl hw_divide // digit % 10 = extracted_digit
+    // We finally have our extracted digit. Now we send it to the display by adding the digit to '0' (48) in ASCII
+    // which will display the number we want.
     // Send '0' + extracted_digit to display
     mov r0, r1 // r0 is our digit
     add r0, #'0'
     mov r1, #1
     bl lcd_send_byte
     // display_digit--
-    sub r3, #1
+    sub r3, #1 // Decrement so we get the next place to display
     b _display_number_digit_display_loop
 _display_number_ret:
     pop {r1-r5, pc}
 
 // Clears the display
+// NOTE: From Arias' C code TODO: find attribution
 clear_display:
     push {r0-r1, lr}
 
@@ -376,8 +389,8 @@ clear_display:
     pop {r0-r1, pc}
 
 
-.data
-welcome: .ascii "Welcome!"
+.data // Data section for variables we store in the binary
+welcome: .ascii "Welcome!" // .ascii is a NOT null-terminated array of characters
 
 .align 2
 key_map:
