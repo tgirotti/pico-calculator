@@ -4,7 +4,12 @@
     // UMass Lowell EECE.3170 Microprocessors I
     // Project: RP2040-based Calculator in ARM Assembly
 
-// Includes for named memory addresses from the datasheet
+    // Individual contributions to code are marked before identifiers
+    // NOTE: When Arias' C code is mentioned, it is referring to https://github.com/TheMadSocrates/robotarm/blob/master/lcd/hd44780.c
+    //       which is Copyright (C) 2014 Orlando Arias. Used with permission
+
+// Includes for named memory addresses from the datasheet (.S ran through C-preprocessor and I had issues trying to get .include to work
+// in my hw despite me thinking it's the same)
 #include "hardware/regs/addressmap.h" //Base addresses for all peripheral blocks
 #include "pico/asm_helper.S" // Named memory-mapped registers
 #include "hardware/regs/io_bank0.h" // IO Bank registers
@@ -34,6 +39,7 @@ pico_calc:                  // main   // Main label
     bl clear_display // Call clear_display subroutine with link (clears the LCD screen)
     mov r2, #0 // r2 is the counter for _send_loop
 
+// Thomas' test code for LCD display (when it wasn't burnt to a crisp)
 _send_loop: // Loop to send "Welcome!" to the screen for testing
     cmp r2, #8 // Is r2 >= 8?
     bge _send_loop_exit // If so, we should exit the loop
@@ -51,7 +57,7 @@ _send_loop_exit: // Label for exit of loop
     bl display_number // Call display_number
 
 
-
+// Nick's loop to scan keyboard
 main_loop: // Main program loop: Continuously scan keypad for button presses and display them on LCD
     bl scan_keyboard // Call keyboard scan subroutine
     cmp r0, #0xFF //seeing if button is pressed
@@ -71,6 +77,7 @@ wait_for_button: // Subroutine to debounce a button
 
     b main_loop // No more buttons are being pressed, so we can go back to main loop
 
+// Nick's scan keyboard function
 scan_keyboard: // Test and scan keyboard subroutine (TODO: Nick Comments)
     push {r4-r7, lr}
     ldr r4, =SIO_BASE
@@ -147,7 +154,7 @@ kbd_loop:
     ble kbd_loop
     pop {pc}
 
-
+// Nick + Thomas
 // Initialize GPIO pins
 gpio_init:
     push {r0-r4, lr} // Push any registers we use to the stack (no enforced calling convention)
@@ -173,7 +180,7 @@ gpio_init:
 
     pop {r0-r4, pc} // Pop r0-r4 off the stack and pop pc, which will set pc = lr from when we pushed it
 
-
+// Nick
 // R3 - Pin to start
 // R4 - Pin to end at inclusive
 gpio_loop_data:
@@ -187,7 +194,7 @@ gpio_loop_data_loop:
 
     pop {pc}
 
-
+// Nick
 // Select Function 5 (SIO) for GPIO pins
 set_pin_sio:
     push {r0-r1}
@@ -202,6 +209,7 @@ set_pin_sio:
     pop {r0-r1}
     bx lr
 
+// Thomas ported from his HW6, original from Lecture
 // Delay for number of microseconds
 // r0 - Contains the number of microseconds to stall 
 // NOTE: This code is from Lecture ## TODO
@@ -209,37 +217,40 @@ delay_us:
     push {r1-r3} // Push r1-r3 onto the stack (we will overwrite them)
     ldr r2, =TIMER_BASE // r2 has the address of TIMER_BASE from datasheet
     ldr r1, [r2, #TIMER_TIMELR_OFFSET]  // grab start time 
-    add r1, r0
-delay_wait:
+    add r1, r0 // Grab end time from caller's passed arguments
+delay_wait: // Loop to wait until the timer exceeds the 
     ldr r3, [r2, #TIMER_TIMELR_OFFSET]
     cmp r3, r1
-    blo delay_wait
+    blo delay_wait // blo is synonym for blt
     pop {r1-r3}
     bx lr
 
+// Translated by Thomas, original code in C from Arias (used with permission)
 // NOTE: This code was translated from Arias' C code (TODO: specify lines)
+// Pulses the enable pin
 lcd_pulse_enable:
     push {r0-r2, lr}
 
     // Set Enable HI
-    mov r0, #1
-    lsl r0, #E_PIN
-    ldr r1, =(SIO_BASE + SIO_GPIO_OUT_SET_OFFSET)
-    str r0, [r1] // Set pin HI
-    // Sleep 20us
-    mov r0, #20
-    bl delay_us
+    mov r0, #1 // Starting mask
+    lsl r0, #E_PIN // Left shift the binary 1 to the GPIO pin for LCD enable
+    ldr r1, =(SIO_BASE + SIO_GPIO_OUT_SET_OFFSET) // r1 has the address of the GPIO output set register (so we can actually enable the pin)
+    str r0, [r1] // Set pin HI. This is an atomic write-only register, so it only _sets_ enable on E_PIN, and won't affect other pins
+    // Sleep 20us (per LCD datasheet)
+    mov r0, #20 // r0 has the amount of microseconds to sleep
+    bl delay_us // Call the microsecond delay
     // Set Enable LO
-    mov r0, #1
-    lsl r0, #E_PIN
-    ldr r1, =(SIO_BASE + SIO_GPIO_OUT_CLR_OFFSET)
-    str r0, [r1] // Set pin LO
-    // Sleep 50us
+    mov r0, #1 // Starting mask
+    lsl r0, #E_PIN // Left shift binary 1 to GPIO pin for enable
+    ldr r1, =(SIO_BASE + SIO_GPIO_OUT_CLR_OFFSET) // Same behavior as output set WO register, but this one clears our pin!
+    str r0, [r1] // Set the pin low
+    // Sleep 50us (from datasheet)
     mov r0, #50
     bl delay_us
 
     pop {r0-r2, pc}
 
+// Translated by Thomas, original code in C from Arias (used with permission)
 // R0 - Contains the nibble to send. LO bits are discarded.
 // NOTE: This code translated from Arias TODO
 lcd_send_nibble:
@@ -261,42 +272,44 @@ lcd_send_nibble:
 
     pop {r1-r2, pc} // Pop our used registers r1-r2 off the stack, and return to our caller
 
+// Translated by Thomas, original code in C from Arias (used with permission)
 // R0 - Byte to send
 // R1 - 0 for commands, 1 for data
-// NOTE: This was taken from Arias' C code TODO
+// NOTE: This was translated from Arias' C code function lcd_send_byte
 lcd_send_byte:
-    push {r1-r4, lr} // TODO: This doesn't do what we want it to do
+    push {r1-r4, lr} // TODO: Don't push r1 here
 
     mov r4, r1 // Copy is_data to r4
-    // Clear RS
-    mov r1, #1
-    lsl r1, #RS_PIN
-    ldr r2, =(SIO_BASE + SIO_GPIO_OUT_CLR_OFFSET)
-    str r1, [r2]
+    // Clear RS (may be high from last send)
+    mov r1, #1 // Start with 1 so we can shift it into a bitmask
+    lsl r1, #RS_PIN // Create the RS_PIN bitmask
+    ldr r2, =(SIO_BASE + SIO_GPIO_OUT_CLR_OFFSET) // Address of WO clear GPIO register to clear any existing data
+    str r1, [r2] // Actually clear the RS pin
 
     cmp r4, #0 // Is data (characters)?
-    beq _lcd_send_byte_send_nibbles // This beq from the cmp from the start of the function before we push r1
-    // Is data, set RS
-    mov r1, #1
-    lsl r1, #RS_PIN
-    ldr r2, =(SIO_BASE + SIO_GPIO_OUT_SET_OFFSET)
-    str r1, [r2]
+    beq _lcd_send_byte_send_nibbles // We're sending command, so just send it
+    // Else we have data, set the RS pin first before sending
+    mov r1, #1 // Starting bitmask
+    lsl r1, #RS_PIN // Align with the RS_PIN
+    ldr r2, =(SIO_BASE + SIO_GPIO_OUT_SET_OFFSET) // Address of WO GPIO set register
+    str r1, [r2] // Actually turn on the RS pin
 _lcd_send_byte_send_nibbles:
     // Send high nibble
     mov r3, r0 // r3 has original byte
     lsr r0, #4 // Align high nibble
-    bl lcd_send_nibble
+    bl lcd_send_nibble // Actually send nibble
 
     mov r0, r3 // Copy original byte back into r0
-    mov r1, #0x0F
+    mov r1, #0x0F // Mask to keep lower bits
     and r0, r1 // Mask off low nibble
-    bl lcd_send_nibble
+    bl lcd_send_nibble // actually send nibble
 
-    ldr r0, =500
-    bl delay_us
+    ldr r0, =500 // Delay for 500us
+    bl delay_us // Call our delay function
 
-    pop {r1-r4, pc}
+    pop {r1-r4, pc} // Pop r1-r4 off the stack, and return by popping the program counter
 
+// Copied by Thomas from datasheet with minor edits
 // R0 has dividend
 // R1 has divisor
 // When complete, R0 will have quotient, R1 will have remainder
@@ -324,7 +337,7 @@ hw_divide: // From datasheet, p.32
     pop {r2-r3} // Done with r2-r3, pop them from the stack
     bx lr // Return to the caller
 
-
+// Thomas' code to extract decimal digits from a number to display using the screen
 // Precondition: r0 contains the number to display
 //               The number is 16 decimal digits or less
 // NOTE: It is the CALLEE's responsibility to clear the display before executing
@@ -374,24 +387,26 @@ _power_ten_loop_exit:
 _display_number_ret:
     pop {r1-r5, pc}
 
+// Translated by Thomas, original code in C from Arias (used with permission)
 // Clears the display
 // NOTE: From Arias' C code TODO: find attribution
 clear_display:
-    push {r0-r1, lr}
+    push {r0-r1, lr} // Push r0-r1 (used as locals), and lr since we're not a leaf function
 
-    mov r0, #0x01 // Clear display instruction
-    mov r1, #0x00 // Command
+    mov r0, #0x01 // Clear display instruction from datasheet
+    mov r1, #0x00 // Sending a command
     bl lcd_send_byte
     // Wait >1.52ms
     ldr r0, =1520
-    bl delay_us
+    bl delay_us // 
 
-    pop {r0-r1, pc}
+    pop {r0-r1, pc} // Pop r0-r1 and rerturn to caller by popping pc
 
 
 .data // Data section for variables we store in the binary
 welcome: .ascii "Welcome!" // .ascii is a NOT null-terminated array of characters
 
+// Nick
 .align 2
 key_map:
 .ascii "789  "      //row 1
